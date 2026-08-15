@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
-"""Adds a ROM to roms/ and writes its catalogue entry.
+"""Writes a catalogue entry for a ROM, deriving everything mechanical.
 
-The mechanical fields — filename, size, sha256 and the raw URL — are derived
-from the file itself, which is where hand-written entries go wrong. Everything
-requiring judgement is asked for on the command line.
+filename, size, sha256 and the URL are what hand-written entries get wrong,
+so they are computed; the command line asks only for judgement.
+
+Committing the ROM to this repo:
 
     python3 index/add_rom.py ~/Downloads/katkrat.gb \\
         --title Katkrat --author SevenLuchtveer \\
         --platform gbc --licence author-permitted \\
         --source-page https://sevenluchtveer.itch.io/katkrat
+
+Hosting it yourself — the file is fetched so the hash describes what a badge
+will actually receive, and a redirecting URL is refused because the badge
+cannot follow one:
+
+    python3 index/add_rom.py --url https://example.com/roms/katkrat.gb \\
+        --title Katkrat --author SevenLuchtveer \\
+        --platform gbc --licence author-permitted
 """
 
 import argparse
@@ -19,6 +28,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import urllib.error
+
+from check_urls import fetch
 from validate import EXTENSIONS, problems_with
 
 REPOSITORY = Path(__file__).resolve().parent.parent
@@ -27,22 +39,41 @@ INDEX = REPOSITORY / "index" / "index.json"
 DEFAULT_BRANCH = "main"
 
 
-class RomFile:
-    """A ROM on disk, and everything about it the catalogue can derive."""
+class PublishableRom:
+    """A ROM the catalogue can describe, however it was obtained.
 
-    def __init__(self, path):
-        self.path = path
-        self.filename = path.name
-        self.size = path.stat().st_size
-        self.sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+    Either it is a file being committed to `roms/`, or it already sits on
+    somebody's own server. Both paths end with the same four facts: a
+    filename, a size, a hash and the URL a badge will fetch.
+    """
+
+    def __init__(self, filename, contents, url):
+        self.filename = filename
+        self.size = len(contents)
+        self.sha256 = hashlib.sha256(contents).hexdigest()
+        self.url = url
 
     @classmethod
-    def published_as(cls, source, platform):
+    def from_file(cls, source, platform, url_base):
         cls._refuse_wrong_extension(source.name, platform)
-        return cls(cls._copy_into_repository(source))
+        path = cls._copy_into_repository(source)
+        return cls(path.name, path.read_bytes(),
+                   "{}/{}".format(url_base.rstrip("/"), path.name))
 
-    def raw_url(self, url_base):
-        return "{}/{}".format(url_base.rstrip("/"), self.filename)
+    @classmethod
+    def from_url(cls, url, platform, filename=None):
+        """Self-hosted: fetch it, so the hash describes what a badge will get."""
+        name = filename or url.rstrip("/").rsplit("/", 1)[-1]
+        cls._refuse_wrong_extension(name, platform)
+        print("fetching {}".format(url))
+        try:
+            contents = fetch(url)
+        except urllib.error.HTTPError as error:
+            raise SystemExit("{} -> HTTP {} {}".format(url, error.code, error.reason))
+        except (urllib.error.URLError, OSError) as error:
+            raise SystemExit("{} -> unreachable ({})".format(url, error))
+        print("fetched {} bytes".format(len(contents)))
+        return cls(name, contents, url)
 
     @staticmethod
     def _copy_into_repository(source):
@@ -105,13 +136,13 @@ def repository_slug():
     return "/".join(url.split("/")[-2:])
 
 
-def entry_for(rom, arguments, url_base):
+def entry_for(rom, arguments):
     entry = {
         "title": arguments.title,
         "author": arguments.author,
         "licence": arguments.licence,
         "platform": arguments.platform,
-        "url": rom.raw_url(url_base),
+        "url": rom.url,
         "filename": rom.filename,
         "size": rom.size,
         "sha256": rom.sha256,
@@ -126,7 +157,13 @@ def entry_for(rom, arguments, url_base):
 def parse_arguments(argv):
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("rom", type=Path, help="the ROM file to publish")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("rom", type=Path, nargs="?",
+                        help="a ROM file to commit to roms/")
+    source.add_argument("--url",
+                        help="an https:// url you already host the ROM at")
+    parser.add_argument("--filename",
+                        help="name to install as; defaults to the url's last segment")
     parser.add_argument("--title", required=True)
     parser.add_argument("--author", required=True)
     parser.add_argument("--platform", required=True,
@@ -145,15 +182,11 @@ def parse_arguments(argv):
 
 def main(argv):
     arguments = parse_arguments(argv)
-    if not arguments.rom.is_file():
-        raise SystemExit("no such file: {}".format(arguments.rom))
+    rom = obtain(arguments)
 
-    rom = RomFile.published_as(arguments.rom, arguments.platform)
     catalogue = Catalogue(INDEX)
     catalogue.refuse_duplicate(rom.filename)
-
-    url_base = arguments.url_base or raw_url_base(arguments.branch)
-    entry = entry_for(rom, arguments, url_base)
+    entry = entry_for(rom, arguments)
 
     problems = list(problems_with(entry, 0))
     if problems:
@@ -162,8 +195,19 @@ def main(argv):
 
     catalogue.add(entry)
     print(json.dumps(entry, indent=2))
-    print("\nadded to index/index.json - commit roms/{} with it".format(rom.filename))
+    print("\nadded to index/index.json{}".format(
+        "" if arguments.url else " - commit roms/{} with it".format(rom.filename)))
     return 0
+
+
+def obtain(arguments):
+    if arguments.url:
+        return PublishableRom.from_url(
+            arguments.url, arguments.platform, arguments.filename)
+    if not arguments.rom.is_file():
+        raise SystemExit("no such file: {}".format(arguments.rom))
+    url_base = arguments.url_base or raw_url_base(arguments.branch)
+    return PublishableRom.from_file(arguments.rom, arguments.platform, url_base)
 
 
 if __name__ == "__main__":

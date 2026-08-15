@@ -23,6 +23,19 @@ the raw URL, and appends the entry. Then commit both the ROM and the changed
 
 `--art-url` adds box art. `--branch` and `--url-base` override the derived URL.
 
+If you host the ROM yourself, pass `--url` instead of a file:
+
+```sh
+python3 index/add_rom.py --url https://example.com/roms/your-title.gb \
+    --title "Some Title" --author YourName \
+    --platform gbc --licence author-permitted
+```
+
+It fetches the file so the hash describes what a badge will actually receive,
+and refuses a URL that redirects. Nothing is copied into `roms/`, so the pull
+request is a one-line change to `index/index.json`. See
+[Hosting the ROM yourself](#hosting-the-rom-yourself).
+
 ## By hand
 
 1. Commit the ROM to `roms/`. Its extension must match the platform — see the
