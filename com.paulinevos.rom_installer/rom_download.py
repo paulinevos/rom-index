@@ -7,6 +7,7 @@ import os
 
 from mpos import DownloadManager
 
+from http_fetch import as_http_error
 from rom_destination import RomDestination
 from zip_payload import NotAUsableArchive, ZipPayload
 
@@ -47,9 +48,45 @@ class RomDownload:
         except Exception as error:
             handle.close()
             self._discard(partial_path)
-            raise InstallFailed("download failed: {}".format(error))
+            raise InstallFailed(self._explain(error))
         handle.close()
+        self._check_size(partial_path)
         self._verify(partial_path, digest)
+
+    def _explain(self, error):
+        """Say which host let us down.
+
+        ROMs may be hosted anywhere, so 'download failed' leaves the user with
+        nowhere to look. Naming the host separates 'this entry is stale' from
+        'your wifi is down'.
+        """
+        host = self._host()
+        http_error = as_http_error(error) if isinstance(error, RuntimeError) else None
+        if http_error and http_error.is_not_found():
+            return "{} no longer has this ROM (HTTP {})".format(host, http_error.status)
+        if http_error and http_error.is_unauthorized():
+            return "{} refused the download (HTTP {})".format(host, http_error.status)
+        if http_error and http_error.status:
+            return "{} returned HTTP {}".format(host, http_error.status)
+        return "could not reach {}".format(host)
+
+    def _check_size(self, partial_path):
+        # A server that answers a redirect with a small body looks like a
+        # successful download to DownloadManager, which does not follow
+        # redirects. Catching it here beats a bare checksum mismatch.
+        if not self._entry.size:
+            return
+        actual = os.stat(partial_path)[6]
+        if actual == self._entry.size:
+            return
+        self._discard(partial_path)
+        raise InstallFailed(
+            "{} sent {} bytes, expected {}; it may have redirected instead of "
+            "sending the file".format(self._host(), actual, self._entry.size))
+
+    def _host(self):
+        without_scheme = self._entry.url.split("://", 1)[-1]
+        return without_scheme.split("/", 1)[0]
 
     async def _pump(self, handle, digest):
         async def write_chunk(chunk):
@@ -84,7 +121,9 @@ class RomDownload:
         if actual == self._entry.sha256.lower():
             return
         self._discard(partial_path)
-        raise InstallFailed("checksum mismatch: the file served is not the approved one")
+        raise InstallFailed(
+            "{} served a different file than the one approved "
+            "(checksum mismatch)".format(self._host()))
 
     def _new_digest(self):
         if not self._entry.sha256:

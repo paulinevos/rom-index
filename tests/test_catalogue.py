@@ -151,11 +151,15 @@ class ShippedIndexTest(unittest.TestCase):
         self.assertEqual(len(published), len(json.loads(index.read_text())["catalog"]))
         self.assertFalse(published.matching(CatalogueFilter()).is_empty())
 
-    def test_every_shipped_rom_is_present_with_the_stated_hash(self):
+    def test_every_rom_hosted_here_is_present_with_the_stated_hash(self):
+        # Self-hosted entries point elsewhere and cannot be checked offline;
+        # index/check_urls.py verifies those over the network in CI.
         import hashlib
 
         root = Path(__file__).resolve().parent.parent
         for record in json.loads((root / "index" / "index.json").read_text())["catalog"]:
+            if "/roms/" not in record["url"] or "raw.githubusercontent.com" not in record["url"]:
+                continue
             rom = root / "roms" / record["filename"]
             self.assertTrue(rom.exists(), "{} is indexed but not in roms/".format(rom.name))
             digest = hashlib.sha256(rom.read_bytes()).hexdigest()

@@ -34,10 +34,10 @@ async def fetch_bytes(url, redact_url=False):
     try:
         return await mpos.DownloadManager.download_url(url, redact_url=redact_url)
     except RuntimeError as error:
-        raise _as_http_error(error)
+        raise as_http_error(error)
 
 
-def _as_http_error(error):
+def as_http_error(error):
     status = _status_from(str(error))
     if status:
         return HttpError(status, "server returned HTTP {}".format(status))

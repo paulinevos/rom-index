@@ -23,3 +23,8 @@ jobs:
       # and no record may be silently skipped when the app parses the file.
       - name: Check ROMs against the index
         run: python3 -m unittest discover -s tests -v
+
+      # Self-hosted entries cannot be checked offline: fetch every URL and
+      # confirm it serves the promised bytes without redirecting.
+      - name: Fetch every catalogue URL
+        run: python3 index/check_urls.py index/index.json

@@ -56,6 +56,29 @@ python3 index/validate.py index/index.json
 The app verifies the hash of what it downloads against `sha256` and discards
 the file if they differ, so a wrong hash means nobody can install the ROM.
 
+## Hosting the ROM yourself
+
+Committing the ROM to `roms/` is the simple path, but `url` may point anywhere
+that serves the file over HTTPS. If you host it yourself:
+
+- **The URL must not redirect.** The badge cannot follow one — it treats a 3xx
+  as success and writes the redirect body to disk. CI rejects a redirecting
+  URL, so this is caught at review rather than by users. This rules out GitHub
+  release assets, S3 pre-signed links, and most `http`→`https` setups.
+- **It must serve the exact bytes in `sha256`.** If the file later changes, the
+  app discards the download and tells the user which host served something
+  different. Users are never handed a file you did not approve.
+- **If your host goes away**, the entry stops working and the app says it could
+  not reach that host by name. Nobody will chase you about it, so keep an eye
+  on your own entries.
+
+CI fetches every URL in the index on each pull request and checks the hash,
+the size, and that it does not redirect:
+
+```sh
+python3 index/check_urls.py index/index.json
+```
+
 ## Platforms
 
 `platform` is also the directory the ROM installs into (`roms/gbc/`), and the
