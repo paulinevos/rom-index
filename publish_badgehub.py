@@ -60,15 +60,19 @@ class BadgeHub:
         revision whenever it cannot match one by version, so a leftover build
         is not merely untidy — it is what users would install.
         """
-        for name in self._draft_package_names():
-            if name == keep:
-                continue
+        superseded = [name for name in self._draft_package_names() if name != keep]
+        if not superseded:
+            print("no superseded packages in the draft")
+            return
+        for name in superseded:
             self._send("DELETE", "draft/files/{}".format(name), b"",
                        "application/json", "removing superseded {}".format(name))
 
     def _draft_package_names(self):
-        draft = self._get("draft")
-        files = (draft or {}).get("files") or []
+        # A DetailedProject nests the file list under `version`, not at the
+        # top level; reading the wrong key made this silently find nothing.
+        draft = self._get("draft") or {}
+        files = (draft.get("version") or {}).get("files") or []
         return [file.get("name", "") + file.get("ext", "")
                 for file in files if file.get("ext") == ".mpk"]
 
