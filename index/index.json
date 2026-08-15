@@ -1,5 +1,18 @@
 {
   "schema": 1,
   "updated": "2026-08-15",
-  "catalog": []
+  "catalog": [
+    {
+      "title": "Katkrat",
+      "author": "SevenLuchtveer",
+      "licence": "author-permitted",
+      "platform": "gbc",
+      "url": "https://raw.githubusercontent.com/paulinevos/rom-index/main/roms/katkrat.gb",
+      "source_page": "https://sevenluchtveer.itch.io/katkrat",
+      "filename": "katkrat.gb",
+      "size": 131072,
+      "sha256": "4236026d1dd5197164c1009191a159e7a3d495bc0d63002f5a7cfddc58846195",
+      "free": true
+    }
+  ]
 }

@@ -28,6 +28,13 @@ EXTENSIONS = {
 REQUIRED = ("title", "platform", "url", "filename", "licence")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
+# GitHub refuses pushes over 100 MB per file and warns past 50 MB. A ROM
+# approaching that is the signal to move hosting to release assets — which
+# also means teaching the app to follow redirects, since raw.githubusercontent
+# does not redirect but release assets do.
+SIZE_WARNING = 20 * 1024 * 1024
+SIZE_LIMIT = 90 * 1024 * 1024
+
 
 def problems_with(entry, position):
     where = "catalog[{}]".format(position)
@@ -49,6 +56,13 @@ def problems_with(entry, position):
     digest = entry.get("sha256", "")
     if not SHA256.match(digest):
         yield "{}: sha256 must be 64 lowercase hex characters".format(where)
+    size = entry.get("size", 0)
+    if size > SIZE_LIMIT:
+        yield "{}: {} MB exceeds what git will accept; host it as a release asset".format(
+            where, size // (1024 * 1024))
+    elif size > SIZE_WARNING:
+        yield "{}: {} MB is large for git history; consider a release asset".format(
+            where, size // (1024 * 1024))
 
 
 def problems_with_document(document):

@@ -141,11 +141,24 @@ class GameAndWatchTest(unittest.TestCase):
 
 class ShippedIndexTest(unittest.TestCase):
 
-    def test_the_index_in_this_repo_parses(self):
+    def test_every_shipped_entry_parses_and_survives_the_default_filter(self):
         index = Path(__file__).resolve().parent.parent / "index" / "index.json"
-        catalogue = Catalogue.parse(index.read_text())
-        # Empty until entries are curated; parsing is what matters here.
-        self.assertTrue(catalogue.is_empty())
+        published = Catalogue.parse(index.read_text())
+        # A record the app silently skips would be invisible on the badge, so
+        # assert the whole file survives rather than merely that it parses.
+        self.assertEqual(len(published), len(json.loads(index.read_text())["catalog"]))
+        self.assertFalse(published.matching(CatalogueFilter()).is_empty())
+
+    def test_every_shipped_rom_is_present_with_the_stated_hash(self):
+        import hashlib
+
+        root = Path(__file__).resolve().parent.parent
+        for record in json.loads((root / "index" / "index.json").read_text())["catalog"]:
+            rom = root / "roms" / record["filename"]
+            self.assertTrue(rom.exists(), "{} is indexed but not in roms/".format(rom.name))
+            digest = hashlib.sha256(rom.read_bytes()).hexdigest()
+            self.assertEqual(digest, record["sha256"], record["filename"])
+            self.assertEqual(rom.stat().st_size, record["size"], record["filename"])
 
 
 if __name__ == "__main__":
