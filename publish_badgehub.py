@@ -29,6 +29,10 @@ BASE_URL = "https://badgehub.eu/api/v3"
 DEFAULT_SLUG = "com.paulinevos.rom_installer"
 TOKEN_HEADER = "badgehub-api-token"
 BOUNDARY = "----badgehub-release-boundary"
+# badgehub.eu sits behind Cloudflare, which answers the default
+# "Python-urllib/x.y" agent with 403 and error code 1010 before the request
+# ever reaches the API. Any ordinary agent string is accepted.
+USER_AGENT = "rom-installer-release/1.0 (+https://github.com/paulinevos/rom-index)"
 
 
 class PublishFailed(Exception):
@@ -90,6 +94,7 @@ class BadgeHub:
             return {}
         request = urllib.request.Request(url, method="GET")
         request.add_header(TOKEN_HEADER, self._token)
+        request.add_header("User-Agent", USER_AGENT)
         try:
             with urllib.request.urlopen(request) as response:
                 return json.loads(response.read())
@@ -105,6 +110,7 @@ class BadgeHub:
         request = urllib.request.Request(url, data=body, method=method)
         request.add_header(TOKEN_HEADER, self._token)
         request.add_header("Content-Type", content_type)
+        request.add_header("User-Agent", USER_AGENT)
         try:
             with urllib.request.urlopen(request) as response:
                 print("  {} {}".format(response.status, response.reason))
