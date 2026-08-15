@@ -51,9 +51,18 @@ and the URL goes in the whitelist.
 
 ## Publishing a ROM
 
-Host the file somewhere that serves it over plain HTTPS with no session —
-GitHub release assets on this repo work well, and the URL never expires. Only
-publish what the licence permits: your own games, or homebrew whose author
+Commit the file to `roms/` in this repo and point `url` at its raw address:
+
+```
+https://raw.githubusercontent.com/paulinevos/rom-index/main/roms/katkrat.gb
+```
+
+`raw.githubusercontent.com` serves the bytes directly — **HTTP 200 with no
+redirect**, unlike a release asset, which 302s to `objects.githubusercontent.com`
+and would need redirect handling the app does not have. ROMs for these consoles
+are tens to hundreds of kilobytes, so keeping them in git is cheap.
+
+Only publish what the licence permits: your own games, or homebrew whose author
 allows redistribution. Where it does not, list nothing and point people at
 `source_page` instead.
 
@@ -80,7 +89,7 @@ Adding one means a pull request appending to `catalog`:
   "author": "SevenLuchtveer",
   "licence": "author-permitted",
   "platform": "gb",
-  "url": "https://github.com/paulinevos/rom-index/releases/download/roms-v1/katkrat.gb",
+  "url": "https://raw.githubusercontent.com/paulinevos/rom-index/main/roms/katkrat.gb",
   "source_page": "https://sevenluchtveer.itch.io/katkrat",
   "filename": "katkrat.gb",
   "size": 131072,
@@ -135,11 +144,10 @@ Checked against [ducalex/retro-go](https://github.com/ducalex/retro-go):
 
 These are the parts I could not exercise from a desktop:
 
-- **Redirects.** `DownloadManager` has no redirect handling, and a GitHub
-  release-asset URL 302s to `objects.githubusercontent.com`. If that is not
-  followed, every install fails and the app needs a `Location` follow. Test
-  this first — it is the most likely breakage, and hosting on release assets
-  makes it certain rather than merely possible.
+- **Redirects.** `DownloadManager` has no redirect handling. Serving ROMs from
+  `raw.githubusercontent.com` avoids the issue (200, no redirect), so this only
+  bites if an entry points somewhere that does redirect. Keep `url` on raw
+  GitHub and it stays a non-problem.
 - **`hashlib.sha256`.** Present in most MicroPython builds. `rom_download.py`
   refuses to install rather than skip verification if it is missing.
 - **Free-space check** uses `os.statvfs`, which not every port implements.
