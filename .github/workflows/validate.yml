@@ -1,5 +1,8 @@
 name: validate
 
+# Index health. The URL check reaches out to whatever hosts the catalogue
+# points at, so a failure here can mean someone else's server is down rather
+# than a mistake in this pull request. Code correctness lives in test.yml.
 on:
   pull_request:
   push:
@@ -18,11 +21,6 @@ jobs:
       # duplicate detection and the size guard.
       - name: Validate the index
         run: python3 index/validate.py index/index.json
-
-      # Every indexed ROM must exist in roms/ with the stated hash and size,
-      # and no record may be silently skipped when the app parses the file.
-      - name: Check ROMs against the index
-        run: python3 -m unittest discover -s tests -v
 
       # Self-hosted entries cannot be checked offline: fetch every URL and
       # confirm it serves the promised bytes without redirecting.
