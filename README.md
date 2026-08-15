@@ -5,6 +5,8 @@ into `/roms/<platform>/` on the file system, where
 [Retro Core Launcher](https://github.com/MicroPythonOS/MicroPythonOS/tree/main/internal_filesystem/apps/com.micropythonos.retrocore_launcher)
 finds them.
 
+Normally, they'd have to be copied over USB. This app allows you to publish ROMs on GitHub and have them installed over Wi-Fi.
+
 ## Adding your own ROM
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
