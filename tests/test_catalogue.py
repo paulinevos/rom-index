@@ -5,17 +5,13 @@ lvgl (the activity itself) is out of scope for this file.
 """
 
 import json
-import sys
-import types
 import unittest
+
+import sys
 from pathlib import Path
 
-APP = Path(__file__).resolve().parent.parent / "com.paulinevos.rom_installer"
-sys.path.insert(0, str(APP))
-
-_mpos = types.ModuleType("mpos")
-_mpos.DownloadManager = None
-sys.modules.setdefault("mpos", _mpos)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import support  # noqa: F401  installs the mpos stub and app import path
 
 from catalogue import Catalogue, CatalogueEntry, CatalogueError  # noqa: E402
 from catalogue_filter import CatalogueFilter  # noqa: E402
@@ -140,7 +136,8 @@ class ShippedIndexTest(unittest.TestCase):
     def test_the_index_in_this_repo_parses(self):
         index = Path(__file__).resolve().parent.parent / "index" / "index.json"
         catalogue = Catalogue.parse(index.read_text())
-        self.assertEqual(len(catalogue), 1)
+        # Empty until entries are curated; parsing is what matters here.
+        self.assertTrue(catalogue.is_empty())
 
 
 if __name__ == "__main__":

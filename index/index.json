@@ -1,18 +1,5 @@
 {
   "schema": 1,
   "updated": "2026-08-15",
-  "catalog": [
-    {
-      "title": "EXAMPLE - replace me",
-      "author": "Some Homebrew Author",
-      "licence": "freeware",
-      "platform": "nes",
-      "itch_game_id": 123456,
-      "itch_upload_id": 7891011,
-      "filename": "example.nes",
-      "size": 40976,
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "art_url": "https://raw.githubusercontent.com/paulinevos/rom-index/main/art/nes/example.png"
-    }
-  ]
+  "catalog": []
 }

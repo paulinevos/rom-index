@@ -56,6 +56,47 @@ bash bundle.sh                        # -> com.paulinevos.rom_installer_0.1.0.mp
 python3 -m unittest discover -s tests # logic only; stubs mpos, skips lvgl
 ```
 
+## The catalogue
+
+`index/index.json` is the discovery layer — itch.io has no browse or search
+endpoint, so what is listed here is exactly what is installable. It is served
+to the badge from
+`raw.githubusercontent.com/paulinevos/rom-index/main/index/index.json`.
+
+**It is currently empty.** The app will report "No free NES/GB/GBC ROMs in the
+catalogue" until entries are curated.
+
+Adding one means a pull request appending to `catalog`:
+
+```json
+{
+  "title": "Micro Mages",
+  "author": "Morphcat Games",
+  "licence": "freeware",
+  "platform": "nes",
+  "itch_game_id": 123456,
+  "itch_upload_id": 7891011,
+  "filename": "micromages.nes",
+  "size": 40976,
+  "sha256": "…64 hex chars…",
+  "free": true,
+  "art_url": "https://…/micromages.png"
+}
+```
+
+`title`, `platform`, `itch_game_id`, `filename`, `licence` and `sha256` are
+required. `itch_upload_id` is required when a game has more than one upload.
+Absent `free`/`price` means free.
+
+```sh
+curl "https://itch.io/api/1/$ITCH_API_KEY/game/<game_id>/uploads"  # find ids
+shasum -a 256 the-file-you-downloaded                              # find sha256
+python3 index/validate.py index/index.json                         # check it
+```
+
+`validate.py` mirrors the platform table in `rom_platform.py`; if retro-go
+gains a console, both need the change.
+
 ## Filtering
 
 By default only **free NES, GB and GBC** entries are shown. Both parts are
