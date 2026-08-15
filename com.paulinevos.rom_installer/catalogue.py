@@ -9,8 +9,7 @@ that file rather than by whatever itch.io happens to be serving today.
 import json
 import logging
 
-from mpos import DownloadManager
-
+from http_fetch import HttpError, fetch_bytes
 from rom_platform import RomPlatform, UnknownPlatform
 
 logger = logging.getLogger(__name__)
@@ -59,8 +58,19 @@ class Catalogue:
 
     @classmethod
     async def fetch(cls, index_url):
-        body = await DownloadManager.download_url(index_url)
+        try:
+            body = await fetch_bytes(index_url)
+        except HttpError as error:
+            raise CatalogueError(cls._explain(error))
         return cls.parse(body)
+
+    @staticmethod
+    def _explain(error):
+        if error.is_not_found():
+            return "no catalogue at that URL (404) - check index_url"
+        if error.is_unauthorized():
+            return "the catalogue URL needs credentials (HTTP {})".format(error.status)
+        return str(error)
 
     @classmethod
     def parse(cls, body):

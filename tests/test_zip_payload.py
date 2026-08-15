@@ -1,18 +1,14 @@
 """Verifies the retro-go single-file archive rule against real ZIPs."""
 
-import sys
 import tempfile
-import types
 import unittest
 import zipfile
+
+import sys
 from pathlib import Path
 
-APP = Path(__file__).resolve().parent.parent / "com.paulinevos.rom_installer"
-sys.path.insert(0, str(APP))
-
-_mpos = types.ModuleType("mpos")
-_mpos.DownloadManager = None
-sys.modules.setdefault("mpos", _mpos)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import support  # noqa: F401  installs the mpos stub and app import path
 
 from rom_platform import RomPlatform  # noqa: E402
 from zip_payload import NotAUsableArchive, ZipPayload  # noqa: E402

@@ -11,7 +11,7 @@ from mpos import (
     TaskManager,
 )
 
-from catalogue import Catalogue, CatalogueError
+from catalogue import Catalogue
 from catalogue_filter import CatalogueFilter
 from itch_api import ItchApiError, ItchApiKey, MissingApiKey
 from rom_download import InstallFailed, RomDownload
@@ -19,7 +19,7 @@ from rom_download import InstallFailed, RomDownload
 logger = logging.getLogger(__name__)
 
 DEFAULT_INDEX_URL = (
-    "https://raw.githubusercontent.com/paulinevos/rom-index/main/index.json"
+    "https://raw.githubusercontent.com/paulinevos/rom-index/main/index/index.json"
 )
 
 API_KEY_SETTING = {
@@ -67,7 +67,10 @@ class RomInstallerActivity(Activity):
         self._filter = CatalogueFilter.from_preferences(self._preferences)
         try:
             published = await Catalogue.fetch(index_url)
-        except (CatalogueError, OSError, ValueError) as error:
+        except Exception as error:
+            # Deliberately broad: an escaping exception leaves the screen on
+            # "Loading catalogue..." with no way to tell what went wrong.
+            logger.error("catalogue load from %s failed: %s", index_url, error)
             self._show("Could not load catalogue: {}".format(error))
             self._render_settings_only()
             return
