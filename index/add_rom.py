@@ -115,10 +115,7 @@ def entry_for(rom, arguments, url_base):
         "filename": rom.filename,
         "size": rom.size,
         "sha256": rom.sha256,
-        "free": arguments.price == 0,
     }
-    if arguments.price:
-        entry["price"] = arguments.price
     for name, value in (("source_page", arguments.source_page),
                         ("art_url", arguments.art_url)):
         if value:
@@ -139,8 +136,6 @@ def parse_arguments(argv):
     parser.add_argument("--source-page", default="",
                         help="where the ROM was published; attribution only")
     parser.add_argument("--art-url", default="")
-    parser.add_argument("--price", type=int, default=0,
-                        help="in cents; omit for free")
     parser.add_argument("--branch", default=DEFAULT_BRANCH,
                         help="branch the raw URL points at (default: %(default)s)")
     parser.add_argument("--url-base",

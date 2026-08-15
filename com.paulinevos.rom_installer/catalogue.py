@@ -34,9 +34,6 @@ class CatalogueEntry:
         self.sha256 = record.get("sha256")
         self.size = record.get("size", 0)
         self.art_url = record.get("art_url")
-        # An entry stating neither a price nor a `free` flag is taken as
-        # free, which is what a homebrew index holds.
-        self.is_free = bool(record.get("free", record.get("price", 0) == 0))
         if not self.platform.accepts(self.filename):
             raise CatalogueError(self.platform.rejection_reason(self.filename))
 

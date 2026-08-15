@@ -109,35 +109,29 @@ class CatalogueFilterTest(unittest.TestCase):
 
     def test_default_keeps_every_console_the_launcher_browses(self):
         catalogue = Catalogue.parse(index_with(
-            a_record(title="NES free"),
-            a_record(title="GB free", platform="gb", filename="a.gb"),
-            a_record(title="GBC free", platform="gbc", filename="a.gbc"),
+            a_record(title="NES"),
+            a_record(title="GB", platform="gb", filename="a.gb"),
             a_record(title="Lynx", platform="lnx", filename="a.lnx"),
             a_record(title="Game and Watch", platform="gw", filename="a.gw"),
-            a_record(title="NES paid", price=500),
         ))
         kept = catalogue.matching(CatalogueFilter())
         self.assertEqual([entry.title for entry in kept],
-                         ["Game and Watch", "GB free", "GBC free", "Lynx", "NES free"])
+                         ["Game and Watch", "GB", "Lynx", "NES"])
+
+    def test_narrows_to_the_configured_consoles(self):
+        catalogue = Catalogue.parse(index_with(
+            a_record(title="NES"),
+            a_record(title="Lynx", platform="lnx", filename="a.lnx"),
+        ))
+        kept = catalogue.matching(CatalogueFilter(("nes",)))
+        self.assertEqual([entry.title for entry in kept], ["NES"])
 
     def test_the_default_platform_list_tracks_rom_platform(self):
         self.assertEqual(set(DEFAULT_PLATFORMS), set(RomPlatform.all_subdirectories()))
 
-    def test_an_explicit_free_flag_beats_a_missing_price(self):
-        catalogue = Catalogue.parse(index_with(a_record(free=False)))
-        self.assertTrue(catalogue.matching(CatalogueFilter()).is_empty())
-
-    def test_free_only_can_be_turned_off(self):
-        catalogue = Catalogue.parse(index_with(a_record(price=500)))
-        kept = catalogue.matching(CatalogueFilter(("nes",), free_only=False))
-        self.assertEqual(len(kept), 1)
-
     def test_names_only_the_consoles_it_actually_narrows_to(self):
-        self.assertEqual(CatalogueFilter().describe_roms(), "free ROMs")
-        self.assertEqual(
-            CatalogueFilter(("nes", "gb")).describe_roms(), "free NES/GB ROMs")
-        self.assertEqual(
-            CatalogueFilter(free_only=False).describe_roms(), "ROMs")
+        self.assertEqual(CatalogueFilter().describe_roms(), "ROMs")
+        self.assertEqual(CatalogueFilter(("nes", "gb")).describe_roms(), "NES/GB ROMs")
 
 
 class GameAndWatchTest(unittest.TestCase):

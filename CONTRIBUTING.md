@@ -11,18 +11,17 @@ the [README](README.md).
 ## The quick way
 
 ```sh
-python3 index/add_rom.py ~/Downloads/katkrat.gb \
-    --title Katkrat --author SevenLuchtveer \
+python3 index/add_rom.py ~/your-roms/your-title.gb \
+    --title "Some Title" --author YourName \
     --platform gbc --licence author-permitted \
-    --source-page https://sevenluchtveer.itch.io/katkrat
+    --source-page https://github.com/username/repo
 ```
 
 This copies the ROM into `roms/`, works out `filename`, `size`, `sha256` and
 the raw URL, and appends the entry. Then commit both the ROM and the changed
 `index/index.json`.
 
-`--price` (in cents) marks a paid game; omit it for free. `--art-url` adds box
-art. `--branch` and `--url-base` override the derived URL.
+`--art-url` adds box art. `--branch` and `--url-base` override the derived URL.
 
 ## By hand
 
@@ -41,14 +40,13 @@ art. `--branch` and `--url-base` override the derived URL.
   "source_page": "https://github.com/username/repo",
   "filename": "your-file.gb",
   "size": 131072,
-  "sha256": "4236026d1dd5197164c1009191a159e7a3d495bc0d63002f5a7cfddc58846195",
-  "free": true
+  "sha256": "4236026d1dd5197164c1009191a159e7a3d495bc0d63002f5a7cfddc58846195"
 }
 ```
 
 `title`, `author`, `platform`, `url`, `filename`, `licence` and `sha256` are
 required. `url` must be `https://`. `source_page` is attribution only and is
-never fetched. Absent `free`/`price` means free.
+never fetched.
 
 ```sh
 shasum -a 256 roms/your-file.gb          # the sha256 the app checks against
