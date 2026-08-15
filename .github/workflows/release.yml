@@ -1,21 +1,11 @@
 name: release
 
+# Publishing a GitHub release is the trigger: its tag names the version.
+# The workflow writes that version into MANIFEST.JSON, attaches the built
+# .mpk to the release, and publishes it to BadgeHub.
 on:
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: Which part of the version to raise
-        type: choice
-        options: [patch, minor, major]
-        default: patch
-      version:
-        description: Exact version instead of a bump, e.g. 1.0.0
-        type: string
-        default: ''
-      badgehub:
-        description: Also publish to BadgeHub
-        type: boolean
-        default: true
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -25,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -35,14 +27,13 @@ jobs:
           python3 index/validate.py index/index.json
           python3 -m unittest discover -s tests
 
-      - name: Raise the version
-        id: bump
+      # Tags have been cut both as "v0.2.4" and "0.2.5", so accept either.
+      - name: Take the version from the tag
+        id: version
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION=$(python3 bump_version.py --set "${{ inputs.version }}")
-          else
-            VERSION=$(python3 bump_version.py "${{ inputs.bump }}")
-          fi
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          python3 bump_version.py --set "$VERSION"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "mpk=com.paulinevos.rom_installer_${VERSION}.mpk" >> "$GITHUB_OUTPUT"
 
@@ -53,37 +44,35 @@ jobs:
       # fullname, or MicroPythonOS rejects it on install.
       - name: Check the archive layout
         run: |
-          MPK="${{ steps.bump.outputs.mpk }}"
+          MPK="${{ steps.version.outputs.mpk }}"
           test -f "$MPK"
           TOP=$(unzip -Z1 "$MPK" | cut -d/ -f1 | sort -u)
           test "$TOP" = "com.paulinevos.rom_installer"
 
-      - name: Commit and tag
+      # Nothing to commit when the manifest already matches the tag, which is
+      # the case when the version was raised before cutting the release.
+      - name: Record the version on the default branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add com.paulinevos.rom_installer/MANIFEST.JSON
-          git commit -m "Release ${{ steps.bump.outputs.version }}"
-          # Annotated, and pushed explicitly: --follow-tags ignores lightweight
-          # tags, which leaves gh release create with nothing to attach to.
-          git tag -a "v${{ steps.bump.outputs.version }}" \
-            -m "Release ${{ steps.bump.outputs.version }}"
-          git push origin HEAD:${{ github.ref_name }}
-          git push origin "v${{ steps.bump.outputs.version }}"
+          if git diff --cached --quiet; then
+            echo "MANIFEST.JSON is already at ${{ steps.version.outputs.version }}"
+            exit 0
+          fi
+          git commit -m "Set version to ${{ steps.version.outputs.version }}"
+          git push origin HEAD:${{ github.event.repository.default_branch }}
 
-      - name: Create the GitHub release
+      - name: Attach the .mpk to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ steps.bump.outputs.version }}" \
-            "${{ steps.bump.outputs.mpk }}" \
-            --title "v${{ steps.bump.outputs.version }}" \
-            --generate-notes
+          gh release upload "${{ github.event.release.tag_name }}" \
+            "${{ steps.version.outputs.mpk }}" --clobber
 
       # Skipped rather than failed when no token is configured, so the GitHub
-      # release still happens if BadgeHub is not set up yet.
+      # release still gets its asset if BadgeHub is not set up.
       - name: Publish to BadgeHub
-        if: inputs.badgehub
         env:
           BADGEHUB_API_TOKEN: ${{ secrets.BADGEHUB_API_TOKEN }}
         run: |
@@ -92,5 +81,5 @@ jobs:
             exit 0
           fi
           python3 publish_badgehub.py \
-            --mpk "${{ steps.bump.outputs.mpk }}" \
-            --version "${{ steps.bump.outputs.version }}"
+            --mpk "${{ steps.version.outputs.mpk }}" \
+            --version "${{ steps.version.outputs.version }}"

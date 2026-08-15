@@ -81,11 +81,10 @@ def main(argv):
         print(manifest.current())
         return 0
 
+    # --set is idempotent on purpose: a release whose tag already matches the
+    # manifest must still build and publish rather than fail.
     new_version = (Version.parse(arguments.exact) if arguments.exact
                    else manifest.current().raised(arguments.part))
-    if str(new_version) == str(manifest.current()):
-        raise SystemExit("already at {}".format(new_version))
-
     manifest.write(new_version)
     print(new_version)
     return 0
