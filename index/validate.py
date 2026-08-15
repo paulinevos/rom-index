@@ -25,7 +25,7 @@ EXTENSIONS = {
     "gw": (".gw",),  # retro-go registers Game & Watch without zip support
 }
 
-REQUIRED = ("title", "platform", "itch_game_id", "filename", "licence")
+REQUIRED = ("title", "platform", "url", "filename", "licence")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -34,6 +34,9 @@ def problems_with(entry, position):
     for field in REQUIRED:
         if not entry.get(field):
             yield "{}: missing '{}'".format(where, field)
+    url = entry.get("url", "")
+    if url and not url.startswith("https://"):
+        yield "{}: url must be https://".format(where)
     platform = entry.get("platform")
     if platform not in EXTENSIONS:
         yield "{}: unknown platform '{}'".format(where, platform)

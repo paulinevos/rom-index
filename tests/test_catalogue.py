@@ -28,8 +28,7 @@ def a_record(**overrides):
         "author": "Morphcat",
         "licence": "freeware",
         "platform": "nes",
-        "itch_game_id": 123,
-        "itch_upload_id": 456,
+        "url": "https://example.test/micromages.nes",
         "filename": "micromages.nes",
         "sha256": "ab" * 32,
         "size": 40976,
@@ -63,6 +62,15 @@ class CatalogueEntryTest(unittest.TestCase):
     def test_refuses_a_filename_that_escapes_the_platform_directory(self):
         with self.assertRaises(CatalogueError):
             CatalogueEntry(a_record(filename="../../boot.py"))
+
+    def test_refuses_a_url_the_badge_cannot_fetch_without_a_session(self):
+        for url in ("http://example.test/a.nes", "", None):
+            with self.assertRaises(CatalogueError):
+                CatalogueEntry(a_record(url=url))
+
+    def test_keeps_the_source_page_for_attribution(self):
+        entry = CatalogueEntry(a_record(source_page="https://x.itch.io/micromages"))
+        self.assertEqual(entry.source_page, "https://x.itch.io/micromages")
 
     def test_subtitle_names_the_console_and_author(self):
         entry = CatalogueEntry(a_record())

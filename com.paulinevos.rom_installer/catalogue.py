@@ -1,9 +1,8 @@
 """The curated catalogue of installable ROMs.
 
-itch.io offers no way to browse or search from the device, so the list of
-what may be installed is a JSON document under your own control. Each entry
-pins an itch.io game and upload, so curation happens by pull request against
-that file rather than by whatever itch.io happens to be serving today.
+The list of what may be installed is a JSON document under your own control.
+Each entry pins a direct https:// URL for an approved ROM, so curation happens
+by pull request against that file. Nothing is discovered at runtime.
 """
 
 import json
@@ -28,17 +27,26 @@ class CatalogueEntry:
         self.author = record.get("author", "")
         self.licence = record.get("licence", "unknown")
         self.platform = RomPlatform(record["platform"])
-        self.game_id = record["itch_game_id"]
-        self.upload_id = record.get("itch_upload_id")
+        self.url = self._required_url(record["url"])
+        # Where the ROM came from, shown for attribution; never fetched.
+        self.source_page = record.get("source_page", "")
         self.filename = self._required_name(record["filename"])
         self.sha256 = record.get("sha256")
         self.size = record.get("size", 0)
         self.art_url = record.get("art_url")
-        # itch.io prices are in cents; an entry that states neither a price nor
-        # a `free` flag is taken as free, which is what a homebrew index holds.
+        # An entry stating neither a price nor a `free` flag is taken as
+        # free, which is what a homebrew index holds.
         self.is_free = bool(record.get("free", record.get("price", 0) == 0))
         if not self.platform.accepts(self.filename):
             raise CatalogueError(self.platform.rejection_reason(self.filename))
+
+    @staticmethod
+    def _required_url(url):
+        # Plain HTTPS only: the badge fetches this without a session, so
+        # anything needing cookies or a signature would fail at install time.
+        if not isinstance(url, str) or not url.startswith("https://"):
+            raise CatalogueError("'{}' is not an https:// URL".format(url))
+        return url
 
     @staticmethod
     def _required_name(filename):

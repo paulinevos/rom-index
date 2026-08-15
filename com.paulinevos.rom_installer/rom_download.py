@@ -7,7 +7,6 @@ import os
 
 from mpos import DownloadManager
 
-from itch_api import ItchGame
 from rom_destination import RomDestination
 from zip_payload import NotAUsableArchive, ZipPayload
 
@@ -22,9 +21,8 @@ class RomDownload:
 
     PARTIAL_SUFFIX = ".part"
 
-    def __init__(self, entry, api_key, progress_reporter):
+    def __init__(self, entry, progress_reporter):
         self._entry = entry
-        self._api_key = api_key
         self._report = progress_reporter
 
     async def install(self):
@@ -32,24 +30,20 @@ class RomDownload:
         destination.prepare()
         target = destination.rom_path(self._entry.filename)
         self._refuse_if_present(target)
-
-        await self._report("Asking itch.io for a link...")
-        download = await ItchGame(self._api_key, self._entry.game_id).resolve(
-            self._entry.upload_id, self._entry.filename)
-        self._refuse_if_too_large(destination, download.size)
+        self._refuse_if_too_large(destination, self._entry.size)
 
         partial = target + self.PARTIAL_SUFFIX
-        await self._stream_to(partial, download)
+        await self._stream_to(partial)
         self._check_archive(partial)
         os.rename(partial, target)
         await self._install_art(destination)
         return destination.describe()
 
-    async def _stream_to(self, partial_path, download):
+    async def _stream_to(self, partial_path):
         digest = self._new_digest()
         handle = open(partial_path, "wb")
         try:
-            await self._pump(handle, digest, download)
+            await self._pump(handle, digest)
         except Exception as error:
             handle.close()
             self._discard(partial_path)
@@ -57,7 +51,7 @@ class RomDownload:
         handle.close()
         self._verify(partial_path, digest)
 
-    async def _pump(self, handle, digest, download):
+    async def _pump(self, handle, digest):
         async def write_chunk(chunk):
             handle.write(chunk)
             if digest:
@@ -67,8 +61,8 @@ class RomDownload:
             await self._report("Downloading {:.0f}%".format(percent))
 
         await DownloadManager.download_url(
-            download.url,
-            total_size=download.size or self._entry.size or None,
+            self._entry.url,
+            total_size=self._entry.size or None,
             chunk_callback=write_chunk,
             progress_callback=show_percent,
         )
@@ -90,7 +84,7 @@ class RomDownload:
         if actual == self._entry.sha256.lower():
             return
         self._discard(partial_path)
-        raise InstallFailed("checksum mismatch: the file itch.io served is not the approved one")
+        raise InstallFailed("checksum mismatch: the file served is not the approved one")
 
     def _new_digest(self):
         if not self._entry.sha256:

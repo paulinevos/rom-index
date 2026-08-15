@@ -15,16 +15,26 @@ such restriction, which is how the launcher itself creates those directories.
 ## How it works
 
 ```
-index/index.json  (curated, yours)
-   └─ pins itch.io game_id + upload_id + sha256 per ROM
+index/index.json  (the whitelist, yours)
+   └─ approved ROM: direct https:// url + sha256
         │
-badge:  GET itch.io/api/1/<key>/game/<id>/uploads
-        GET itch.io/api/1/<key>/upload/<uid>/download   → fresh URL
-        stream → verify sha256 → rename into roms/<platform>/
+badge:  GET <url>  →  verify sha256  →  check zip  →
+        rename into roms/<platform>/
 ```
 
-itch.io has no browse or search endpoint, so the catalogue must be yours.
-itch.io is the file host; `index.json` is the approval list.
+`index.json` is the whitelist: an entry there is installable, anything else is
+not. The badge does one plain GET per ROM. No API keys, no sessions, no
+signed URLs.
+
+### Why not the itch.io API
+
+The API needs a personal key per user, and OAuth keys are rejected for
+downloads. The public web flow gets further — `POST /download_url` with an
+`upload_id` returns a link with no key and no CSRF token — but that link is an
+HTML page rather than the file, the real download needs a scraped CSRF token
+plus session cookies, and the signed URL expires in about 30 seconds. None of
+that belongs on a badge. Approved ROMs are published as static files instead
+and the URL goes in the whitelist.
 
 ## Layout
 
@@ -35,19 +45,17 @@ itch.io is the file host; `index.json` is the approval list.
 | `catalogue.py` | Fetches and validates `index.json` |
 | `catalogue_filter.py` | Narrows to free NES/GB/GBC by default |
 | `zip_payload.py` | Enforces retro-go's one-ROM-per-archive rule |
-| `itch_api.py` | The two itch.io calls; wraps the API key |
+| `http_fetch.py` | Turns DownloadManager HTTP failures into typed errors |
 | `rom_download.py` | Streams, hashes, verifies, then commits via rename |
 | `rom_installer.py` | LVGL activity |
 
-## Setup
+## Publishing a ROM
 
-1. Get a **personal** API key at `itch.io/user/settings/api-keys`. OAuth-issued
-   keys are rejected by the download endpoints.
-2. Install the app, open it, tap the settings row. The key can be scanned as a
-   QR code (`InputActivity` offers the camera), which beats typing 40 characters
-   on a badge.
-3. Point `index_url` at your own index, or edit the default in
-   `rom_installer.py`.
+Host the file somewhere that serves it over plain HTTPS with no session —
+GitHub release assets on this repo work well, and the URL never expires. Only
+publish what the licence permits: your own games, or homebrew whose author
+allows redistribution. Where it does not, list nothing and point people at
+`source_page` instead.
 
 ## Build and test
 
@@ -58,9 +66,7 @@ python3 -m unittest discover -s tests # logic only; stubs mpos, skips lvgl
 
 ## The catalogue
 
-`index/index.json` is the discovery layer — itch.io has no browse or search
-endpoint, so what is listed here is exactly what is installable. It is served
-to the badge from
+`index/index.json` is the whitelist. It is served to the badge from
 `raw.githubusercontent.com/paulinevos/rom-index/main/index/index.json`.
 
 **It is currently empty.** The app will report "No free NES/GB/GBC ROMs in the
@@ -70,28 +76,27 @@ Adding one means a pull request appending to `catalog`:
 
 ```json
 {
-  "title": "Micro Mages",
-  "author": "Morphcat Games",
-  "licence": "freeware",
-  "platform": "nes",
-  "itch_game_id": 123456,
-  "itch_upload_id": 7891011,
-  "filename": "micromages.nes",
-  "size": 40976,
+  "title": "Katkrat",
+  "author": "SevenLuchtveer",
+  "licence": "author-permitted",
+  "platform": "gb",
+  "url": "https://github.com/paulinevos/rom-index/releases/download/roms-v1/katkrat.gb",
+  "source_page": "https://sevenluchtveer.itch.io/katkrat",
+  "filename": "katkrat.gb",
+  "size": 131072,
   "sha256": "…64 hex chars…",
   "free": true,
-  "art_url": "https://…/micromages.png"
+  "art_url": "https://…/katkrat.png"
 }
 ```
 
-`title`, `platform`, `itch_game_id`, `filename`, `licence` and `sha256` are
-required. `itch_upload_id` is required when a game has more than one upload.
-Absent `free`/`price` means free.
+`title`, `platform`, `url`, `filename`, `licence` and `sha256` are required.
+`url` must be `https://`. `source_page` is attribution only and is never
+fetched. Absent `free`/`price` means free.
 
 ```sh
-curl "https://itch.io/api/1/$ITCH_API_KEY/game/<game_id>/uploads"  # find ids
-shasum -a 256 the-file-you-downloaded                              # find sha256
-python3 index/validate.py index/index.json                         # check it
+shasum -a 256 the-file-you-published    # find sha256
+python3 index/validate.py index/index.json
 ```
 
 `validate.py` mirrors the platform table in `rom_platform.py`; if retro-go
@@ -130,11 +135,11 @@ Checked against [ducalex/retro-go](https://github.com/ducalex/retro-go):
 
 These are the parts I could not exercise from a desktop:
 
-- **Redirects.** `DownloadManager` has no redirect handling. If the URL from
-  `/upload/<id>/download` 302s to a CDN, downloads will fail and the app needs a
-  `Location` follow. Test this first — it is the most likely breakage.
-- **URL expiry.** The resolved download URL is probably time-limited, which is
-  why it is fetched per install rather than cached. Unconfirmed.
+- **Redirects.** `DownloadManager` has no redirect handling, and a GitHub
+  release-asset URL 302s to `objects.githubusercontent.com`. If that is not
+  followed, every install fails and the app needs a `Location` follow. Test
+  this first — it is the most likely breakage, and hosting on release assets
+  makes it certain rather than merely possible.
 - **`hashlib.sha256`.** Present in most MicroPython builds. `rom_download.py`
   refuses to install rather than skip verification if it is missing.
 - **Free-space check** uses `os.statvfs`, which not every port implements.

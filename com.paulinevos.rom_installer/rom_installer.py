@@ -3,17 +3,10 @@
 import logging
 
 import lvgl as lv
-from mpos import (
-    Activity,
-    Intent,
-    InputActivity,
-    SharedPreferences,
-    TaskManager,
-)
+from mpos import Activity, SharedPreferences, TaskManager
 
 from catalogue import Catalogue
 from catalogue_filter import CatalogueFilter
-from itch_api import ItchApiError, ItchApiKey, MissingApiKey
 from rom_download import InstallFailed, RomDownload
 
 logger = logging.getLogger(__name__)
@@ -21,13 +14,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_INDEX_URL = (
     "https://raw.githubusercontent.com/paulinevos/rom-index/main/index/index.json"
 )
-
-API_KEY_SETTING = {
-    "name": "itch.io API key",
-    "key": "itch_api_key",
-    "ui": "textarea",
-    "description": "From itch.io/user/settings/api-keys. Scan it as a QR code to avoid typing.",
-}
 
 
 class RomInstallerActivity(Activity):
@@ -72,14 +58,14 @@ class RomInstallerActivity(Activity):
             # "Loading catalogue..." with no way to tell what went wrong.
             logger.error("catalogue load from %s failed: %s", index_url, error)
             self._show("Could not load catalogue: {}".format(error))
-            self._render_settings_only()
+            self._render_reload_only()
             return
         self._catalogue = published.matching(self._filter)
         self._render_catalogue()
 
     def _render_catalogue(self):
         self._list.clean()
-        self._add_settings_button()
+        self._add_reload_button()
         if self._catalogue.is_empty():
             self._show("No {} ROMs in the catalogue.".format(self._filter.describe()))
             return
@@ -87,31 +73,23 @@ class RomInstallerActivity(Activity):
             self._add_entry_button(entry)
         self._show("{} {} ROMs.".format(len(self._catalogue), self._filter.describe()))
 
-    def _render_settings_only(self):
+    def _render_reload_only(self):
         self._list.clean()
-        self._add_settings_button()
+        self._add_reload_button()
 
     def _add_entry_button(self, entry):
         button = self._list.add_button(None, "{}\n{}".format(entry.title, entry.subtitle()))
         button.add_event_cb(
             lambda event: self._begin_install(entry), lv.EVENT.CLICKED, None)
 
-    def _add_settings_button(self):
-        button = self._list.add_button(lv.SYMBOL.SETTINGS, "itch.io API key")
-        button.add_event_cb(lambda event: self._edit_api_key(), lv.EVENT.CLICKED, None)
+    def _add_reload_button(self):
+        button = self._list.add_button(lv.SYMBOL.REFRESH, "Reload catalogue")
+        button.add_event_cb(lambda event: self._reload(), lv.EVENT.CLICKED, None)
 
-    def _edit_api_key(self):
-        intent = Intent(activity_class=InputActivity)
-        intent.putExtra("setting", API_KEY_SETTING)
-        intent.putExtra("value", self._preferences.get_string("itch_api_key", ""))
-        self.startActivityForResult(intent, self._api_key_entered)
-
-    def _api_key_entered(self, result):
-        if not result.get("result_code"):
+    def _reload(self):
+        if self._installing:
             return
-        value = result.get("data", {}).get("value", "")
-        self._preferences.edit().put_string("itch_api_key", value).commit()
-        self._show("API key saved.")
+        TaskManager.create_task(self._load_catalogue())
 
     def _begin_install(self, entry):
         if self._installing:
@@ -121,12 +99,9 @@ class RomInstallerActivity(Activity):
 
     async def _install(self, entry):
         try:
-            api_key = ItchApiKey.from_preferences(self._preferences)
-            destination = await RomDownload(entry, api_key, self._show_async).install()
+            destination = await RomDownload(entry, self._show_async).install()
             self._show("Installed {} to {}".format(entry.title, destination))
-        except MissingApiKey:
-            self._show("Set your itch.io API key first (Settings below).")
-        except (ItchApiError, InstallFailed) as error:
+        except InstallFailed as error:
             self._show("{} failed: {}".format(entry.title, error))
         except Exception as error:
             logger.error("unexpected install failure for %s: %s", entry.title, error)
