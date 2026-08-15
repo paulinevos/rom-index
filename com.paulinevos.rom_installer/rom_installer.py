@@ -67,11 +67,11 @@ class RomInstallerActivity(Activity):
         self._list.clean()
         self._add_reload_button()
         if self._catalogue.is_empty():
-            self._show("No {} ROMs in the catalogue.".format(self._filter.describe()))
+            self._show("No {} in the catalogue.".format(self._filter.describe_roms()))
             return
         for entry in self._catalogue:
             self._add_entry_button(entry)
-        self._show("{} {} ROMs.".format(len(self._catalogue), self._filter.describe()))
+        self._show("{} {}.".format(len(self._catalogue), self._filter.describe_roms()))
 
     def _render_reload_only(self):
         self._list.clean()

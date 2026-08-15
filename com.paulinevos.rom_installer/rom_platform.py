@@ -27,6 +27,10 @@ class RomPlatform:
         "gw": ("Game & Watch", (".gw",)),
     }
 
+    @classmethod
+    def all_subdirectories(cls):
+        return tuple(cls._SUBDIRECTORIES)
+
     def __init__(self, subdirectory):
         known = self._SUBDIRECTORIES.get(subdirectory)
         if not known:

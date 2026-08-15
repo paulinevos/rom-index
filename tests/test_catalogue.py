@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import support  # noqa: F401  installs the mpos stub and app import path
 
 from catalogue import Catalogue, CatalogueEntry, CatalogueError  # noqa: E402
-from catalogue_filter import CatalogueFilter  # noqa: E402
+from catalogue_filter import DEFAULT_PLATFORMS, CatalogueFilter  # noqa: E402
 from rom_platform import RomPlatform, UnknownPlatform  # noqa: E402
 
 
@@ -107,17 +107,21 @@ class CatalogueTest(unittest.TestCase):
 
 class CatalogueFilterTest(unittest.TestCase):
 
-    def test_default_keeps_only_free_nes_gb_gbc(self):
+    def test_default_keeps_every_console_the_launcher_browses(self):
         catalogue = Catalogue.parse(index_with(
             a_record(title="NES free"),
             a_record(title="GB free", platform="gb", filename="a.gb"),
             a_record(title="GBC free", platform="gbc", filename="a.gbc"),
             a_record(title="Lynx", platform="lnx", filename="a.lnx"),
+            a_record(title="Game and Watch", platform="gw", filename="a.gw"),
             a_record(title="NES paid", price=500),
         ))
         kept = catalogue.matching(CatalogueFilter())
-        self.assertEqual(
-            [entry.title for entry in kept], ["GB free", "GBC free", "NES free"])
+        self.assertEqual([entry.title for entry in kept],
+                         ["Game and Watch", "GB free", "GBC free", "Lynx", "NES free"])
+
+    def test_the_default_platform_list_tracks_rom_platform(self):
+        self.assertEqual(set(DEFAULT_PLATFORMS), set(RomPlatform.all_subdirectories()))
 
     def test_an_explicit_free_flag_beats_a_missing_price(self):
         catalogue = Catalogue.parse(index_with(a_record(free=False)))
@@ -128,8 +132,12 @@ class CatalogueFilterTest(unittest.TestCase):
         kept = catalogue.matching(CatalogueFilter(("nes",), free_only=False))
         self.assertEqual(len(kept), 1)
 
-    def test_describes_itself_for_the_status_line(self):
-        self.assertEqual(CatalogueFilter().describe(), "free NES/GB/GBC")
+    def test_names_only_the_consoles_it_actually_narrows_to(self):
+        self.assertEqual(CatalogueFilter().describe_roms(), "free ROMs")
+        self.assertEqual(
+            CatalogueFilter(("nes", "gb")).describe_roms(), "free NES/GB ROMs")
+        self.assertEqual(
+            CatalogueFilter(free_only=False).describe_roms(), "ROMs")
 
 
 class GameAndWatchTest(unittest.TestCase):
