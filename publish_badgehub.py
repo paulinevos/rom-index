@@ -23,6 +23,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+import zipfile
 from pathlib import Path
 
 BASE_URL = "https://badgehub.eu/api/v3"
@@ -46,10 +47,10 @@ class BadgeHub:
         self._token = token
         self._dry_run = dry_run
 
-    def publish(self, mpk, version):
+    def publish(self, mpk, metadata):
         self._upload(mpk)
         self._remove_superseded_packages(mpk.name)
-        self._set_version(version)
+        self._set_metadata(metadata)
         self._release()
         return "https://badgehub.eu/page/project/{}".format(self._slug)
 
@@ -82,10 +83,21 @@ class BadgeHub:
                    "multipart/form-data; boundary={}".format(BOUNDARY),
                    "uploading {} ({} bytes)".format(mpk.name, mpk.stat().st_size))
 
-    def _set_version(self, version):
-        body = json.dumps({"version": version}).encode()
+    def _set_metadata(self, metadata):
+        """Overwrite the draft metadata, keeping BadgeHub-only fields.
+
+        This endpoint replaces metadata.json wholesale rather than merging,
+        so sending only the version wipes the name and description off the
+        project page. Fields BadgeHub owns and the manifest knows nothing
+        about — badges, development_status, categories — are read back and
+        preserved.
+        """
+        existing = (self._get("draft") or {}).get("version", {}).get("app_metadata") or {}
+        merged = dict(existing)
+        merged.update(metadata)
+        body = json.dumps(merged).encode()
         self._send("PATCH", "draft/metadata", body, "application/json",
-                   "setting draft version to {}".format(version))
+                   "setting metadata: {}".format(", ".join(sorted(metadata))))
 
     def _release(self):
         self._send("PATCH", "publish", b"", "application/json",
@@ -136,6 +148,27 @@ class BadgeHub:
         return head + mpk.read_bytes() + tail
 
 
+def metadata_in(mpk):
+    """The BadgeHub metadata a manifest describes.
+
+    Read from the MANIFEST.JSON inside the package being published, so the
+    project page can never describe something other than the shipped build.
+    """
+    with zipfile.ZipFile(mpk) as archive:
+        names = [name for name in archive.namelist() if name.endswith("MANIFEST.JSON")]
+        if not names:
+            raise SystemExit("{} contains no MANIFEST.JSON".format(mpk))
+        manifest = json.loads(archive.read(names[0]))
+    return {
+        "name": manifest["name"],
+        "description": manifest["short_description"],
+        "long_description": manifest["long_description"],
+        "author": manifest["publisher"],
+        "version": manifest["version"],
+        "project_type": "app",
+    }
+
+
 def parse_arguments(argv):
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -156,9 +189,15 @@ def main(argv):
     if not token and not arguments.dry_run:
         raise SystemExit("BADGEHUB_API_TOKEN is not set")
 
+    metadata = metadata_in(arguments.mpk)
+    if metadata["version"] != arguments.version:
+        raise SystemExit(
+            "the package says version {} but the release says {}".format(
+                metadata["version"], arguments.version))
+
     try:
         page = BadgeHub(arguments.slug, token, arguments.dry_run).publish(
-            arguments.mpk, arguments.version)
+            arguments.mpk, metadata)
     except PublishFailed as error:
         raise SystemExit("BadgeHub rejected the release: {}".format(error))
     print("\npublished {} {}\n{}".format(arguments.slug, arguments.version, page))
