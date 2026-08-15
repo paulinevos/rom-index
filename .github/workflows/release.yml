@@ -1,0 +1,92 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to raise
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: Exact version instead of a bump, e.g. 1.0.0
+        type: string
+        default: ''
+      badgehub:
+        description: Also publish to BadgeHub
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # A release that ships a broken index is worse than no release.
+      - name: Validate
+        run: |
+          python3 index/validate.py index/index.json
+          python3 -m unittest discover -s tests
+
+      - name: Raise the version
+        id: bump
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION=$(python3 bump_version.py --set "${{ inputs.version }}")
+          else
+            VERSION=$(python3 bump_version.py "${{ inputs.bump }}")
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "mpk=com.paulinevos.rom_installer_${VERSION}.mpk" >> "$GITHUB_OUTPUT"
+
+      - name: Build the .mpk
+        run: bash bundle.sh
+
+      # The archive must hold exactly one top-level directory named after
+      # fullname, or MicroPythonOS rejects it on install.
+      - name: Check the archive layout
+        run: |
+          MPK="${{ steps.bump.outputs.mpk }}"
+          test -f "$MPK"
+          TOP=$(unzip -Z1 "$MPK" | cut -d/ -f1 | sort -u)
+          test "$TOP" = "com.paulinevos.rom_installer"
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add com.paulinevos.rom_installer/MANIFEST.JSON
+          git commit -m "Release ${{ steps.bump.outputs.version }}"
+          git tag "v${{ steps.bump.outputs.version }}"
+          git push origin HEAD:${{ github.ref_name }} --follow-tags
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.bump.outputs.version }}" \
+            "${{ steps.bump.outputs.mpk }}" \
+            --title "v${{ steps.bump.outputs.version }}" \
+            --generate-notes
+
+      # Skipped rather than failed when no token is configured, so the GitHub
+      # release still happens if BadgeHub is not set up yet.
+      - name: Publish to BadgeHub
+        if: inputs.badgehub
+        env:
+          BADGEHUB_API_TOKEN: ${{ secrets.BADGEHUB_API_TOKEN }}
+        run: |
+          if [ -z "$BADGEHUB_API_TOKEN" ]; then
+            echo "::warning::BADGEHUB_API_TOKEN is not set; skipping BadgeHub"
+            exit 0
+          fi
+          python3 publish_badgehub.py \
+            --mpk "${{ steps.bump.outputs.mpk }}" \
+            --version "${{ steps.bump.outputs.version }}"
