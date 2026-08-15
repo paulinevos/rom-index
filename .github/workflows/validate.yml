@@ -1,0 +1,25 @@
+name: validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Schema, required fields, https-only urls, platform/extension match,
+      # duplicate detection and the size guard.
+      - name: Validate the index
+        run: python3 index/validate.py index/index.json
+
+      # Every indexed ROM must exist in roms/ with the stated hash and size,
+      # and no record may be silently skipped when the app parses the file.
+      - name: Check ROMs against the index
+        run: python3 -m unittest discover -s tests -v
